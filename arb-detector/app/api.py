@@ -1,7 +1,8 @@
-"""REST and WebSocket endpoints."""
+"""REST and WebSocket endpoints, plus the browser dashboard."""
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 from fastapi import (
     APIRouter,
@@ -11,6 +12,7 @@ from fastapi import (
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from .models import MarketSnapshot, Opportunity, PollerStatus
@@ -19,6 +21,18 @@ from .store import Store
 from .ws import Broadcaster
 
 router = APIRouter()
+
+_STATIC_DIR = Path(__file__).parent / "static"
+
+
+@router.get("/", include_in_schema=False)
+async def root() -> RedirectResponse:
+    return RedirectResponse(url="/dashboard")
+
+
+@router.get("/dashboard", include_in_schema=False)
+async def dashboard() -> FileResponse:
+    return FileResponse(_STATIC_DIR / "dashboard.html", media_type="text/html")
 
 
 def _store(request: Request) -> Store:

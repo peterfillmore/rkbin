@@ -77,3 +77,14 @@ def test_poller_start_stop_and_config(client):
     resp = client.post("/poller/stop")
     assert resp.status_code == 200
     assert resp.json()["running"] is False
+
+
+def test_dashboard_served(client):
+    resp = client.get("/dashboard")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "Arbitrage monitor" in resp.text
+
+    resp = client.get("/", follow_redirects=False)
+    assert resp.status_code == 307
+    assert resp.headers["location"] == "/dashboard"

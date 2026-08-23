@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Arbitrage Monitor</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page:           #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --hairline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6;   /* cross_book */
+    --series-2:       #eb6834;   /* back_lay */
+    --status-good:    #0ca30c;
+    --status-warning: #fab219;
+    --status-critical:#d03b3b;
+    --delta-up:       #006300;
+    --flash:          rgba(42,120,214,0.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --page:           #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --hairline:       #2c2c2a;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-2:       #d95926;
+      --delta-up:       #0ca30c;
+      --flash:          rgba(57,135,229,0.18);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page:           #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --hairline:       #2c2c2a;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --series-2:       #d95926;
+    --delta-up:       #0ca30c;
+    --flash:          rgba(57,135,229,0.18);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px 24px 48px; }
+
+  /* ---- header ---- */
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+    padding: 4px 0 16px;
+  }
+  header h1 { font-size: 18px; font-weight: 600; margin: 0 auto 0 0; }
+  .conn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--text-secondary);
+  }
+  .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+  .conn[data-state="open"]  .dot { background: var(--status-good); }
+  .conn[data-state="retry"] .dot { background: var(--status-warning); }
+  .conn[data-state="down"]  .dot { background: var(--status-critical); }
+  .controls { display: flex; align-items: center; gap: 8px; }
+  button {
+    font: inherit; font-size: 13px;
+    color: var(--text-primary);
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 6px; padding: 5px 12px; cursor: pointer;
+  }
+  button:hover { border-color: var(--text-muted); }
+  button:disabled { opacity: .45; cursor: default; }
+  label.inline { font-size: 13px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px; }
+  input[type="number"] {
+    font: inherit; font-size: 13px; width: 72px;
+    color: var(--text-primary); background: var(--surface-1);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px;
+  }
+
+  /* ---- stat tiles ---- */
+  .tiles {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    margin-bottom: 20px;
+  }
+  .tile {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+  .tile .value { font-size: 28px; font-weight: 600; line-height: 1.1; }
+  .tile .delta { font-size: 12px; margin-left: 8px; font-weight: 500; }
+  .tile .delta.up   { color: var(--delta-up); }
+  .tile .delta.down { color: var(--status-critical); }
+  .tile .sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+  .tile svg { display: block; margin-top: 8px; width: 100%; height: 36px; }
+
+  /* ---- table ---- */
+  section h2 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+  .tablewrap {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px; overflow-x: auto;
+  }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 9px 14px; border-top: 1px solid var(--hairline); vertical-align: top; }
+  thead th { border-top: 0; font-size: 12px; font-weight: 500; color: var(--text-muted); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.margin { font-weight: 600; }
+  .kind { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .kind .swatch { width: 9px; height: 9px; border-radius: 50%; }
+  .kind.cross_book .swatch { background: var(--series-1); }
+  .kind.back_lay   .swatch { background: var(--series-2); }
+  .event { font-weight: 500; }
+  .sport { color: var(--text-secondary); font-size: 12px; }
+  .legs { margin: 0; padding: 0; list-style: none; font-size: 13px; }
+  .legs li { white-space: nowrap; }
+  .legs .side { display: inline-block; width: 38px; font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; }
+  .legs .odds { font-variant-numeric: tabular-nums; }
+  .legs .stake { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  td.seen { color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+  tr.flash > td { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { background: var(--flash); } to { background: transparent; } }
+  .empty { padding: 28px 14px; text-align: center; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Arbitrage monitor</h1>
+    <span class="conn" id="conn" data-state="retry"><span class="dot"></span><span id="connLabel">Connecting…</span></span>
+    <span class="controls">
+      <button id="btnToggle" disabled>Start</button>
+      <button id="btnPoll" disabled>Poll now</button>
+      <label class="inline">Interval
+        <input id="interval" type="number" min="1" max="3600" step="1" title="Poll interval, seconds"> s
+      </label>
+      <label class="inline">Bankroll
+        <input id="bankroll" type="number" min="0" step="100" value="1000" title="Total stake used to compute per-leg amounts">
+      </label>
+    </span>
+  </header>
+
+  <div class="tiles">
+    <div class="tile">
+      <div class="label">Best margin</div>
+      <div class="value" id="tBest">–</div>
+      <svg id="spark" viewBox="0 0 200 36" preserveAspectRatio="none" role="img" aria-label="Best margin, last 12 polls"></svg>
+    </div>
+    <div class="tile">
+      <div class="label">Active opportunities</div>
+      <div class="value"><span id="tActive">–</span><span class="delta" id="tActiveDelta"></span></div>
+      <div class="sub" id="tKinds"></div>
+    </div>
+    <div class="tile">
+      <div class="label">Markets tracked</div>
+      <div class="value" id="tMarkets">–</div>
+      <div class="sub" id="tSources"></div>
+    </div>
+    <div class="tile">
+      <div class="label">Polls completed</div>
+      <div class="value" id="tPolls">–</div>
+      <div class="sub" id="tPollMeta"></div>
+    </div>
+  </div>
+
+  <section>
+    <h2>Opportunities</h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="num">Margin</th>
+            <th>Kind</th>
+            <th>Event</th>
+            <th>Legs (odds → stake)</th>
+            <th>Last seen</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="empty" id="empty">Waiting for data…</div>
+    </div>
+  </section>
+</main>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const opportunities = new Map();   // id -> opportunity
+const flashIds = new Set();
+const marginHistory = [];          // best margin per poll, last 12
+let running = false;
+let retryDelay = 1000;
+
+const fmtPct = (x) => (x * 100).toFixed(2) + "%";
+const fmtMoney = (x) => x.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+  setConn("retry", "Connecting…");
+  ws.onopen = () => { retryDelay = 1000; setConn("open", "Live"); };
+  ws.onmessage = (ev) => handleMessage(JSON.parse(ev.data));
+  ws.onclose = () => {
+    setConn("down", "Disconnected — retrying");
+    setTimeout(connect, retryDelay);
+    retryDelay = Math.min(retryDelay * 2, 15000);
+  };
+}
+
+function setConn(state, label) {
+  $("conn").dataset.state = state;
+  $("connLabel").textContent = label;
+}
+
+function handleMessage(msg) {
+  if (msg.type === "snapshot") {
+    opportunities.clear();
+    for (const o of msg.opportunities) opportunities.set(o.id, o);
+  } else if (msg.type === "poll") {
+    flashIds.clear();
+    for (const o of [...msg.new, ...msg.changed]) {
+      opportunities.set(o.id, o);
+      flashIds.add(o.id);
+    }
+    for (const id of msg.expired) opportunities.delete(id);
+    const best = bestMargin();
+    marginHistory.push(best);
+    if (marginHistory.length > 12) marginHistory.shift();
+  }
+  updateStatus(msg.status);
+  render();
+}
+
+function bestMargin() {
+  let best = 0;
+  for (const o of opportunities.values()) best = Math.max(best, o.profit_margin);
+  return best;
+}
+
+let prevActive = null;
+function updateStatus(s) {
+  running = s.running;
+  $("btnToggle").textContent = running ? "Stop" : "Start";
+  $("btnToggle").disabled = false;
+  $("btnPoll").disabled = false;
+  if (document.activeElement !== $("interval")) {
+    $("interval").value = s.poll_interval_seconds;
+  }
+  $("tActive").textContent = s.active_opportunities;
+  const delta = $("tActiveDelta");
+  if (prevActive !== null && s.active_opportunities !== prevActive) {
+    const d = s.active_opportunities - prevActive;
+    delta.textContent = (d > 0 ? "+" : "") + d;
+    delta.className = "delta " + (d > 0 ? "up" : "down");
+  }
+  prevActive = s.active_opportunities;
+  $("tMarkets").textContent = s.markets_tracked;
+  $("tSources").textContent = "sources: " + s.sources.join(", ") +
+    (s.last_error ? " · error: " + s.last_error : "");
+  $("tPolls").textContent = s.polls_completed;
+  $("tPollMeta").textContent = s.last_poll_duration_seconds != null
+    ? `last took ${(s.last_poll_duration_seconds * 1000).toFixed(0)} ms · ${running ? "running" : "stopped"}`
+    : (running ? "running" : "stopped");
+}
+
+function render() {
+  const best = bestMargin();
+  $("tBest").textContent = opportunities.size ? fmtPct(best) : "–";
+  const counts = { cross_book: 0, back_lay: 0 };
+  for (const o of opportunities.values()) counts[o.kind] = (counts[o.kind] || 0) + 1;
+  $("tKinds").textContent = `${counts.cross_book} cross-book · ${counts.back_lay} back/lay`;
+  renderSparkline();
+  renderTable();
+}
+
+function renderSparkline() {
+  const svg = $("spark");
+  const pts = marginHistory;
+  if (pts.length < 2) { svg.innerHTML = ""; return; }
+  const w = 200, h = 36, pad = 5;
+  const max = Math.max(...pts, 0.0001);
+  const x = (i) => pad + (i / (pts.length - 1)) * (w - 2 * pad);
+  const y = (v) => h - pad - (v / max) * (h - 2 * pad);
+  const path = pts.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const lastX = x(pts.length - 1), lastY = y(pts[pts.length - 1]);
+  const css = getComputedStyle(document.documentElement);
+  const muted = css.getPropertyValue("--text-muted").trim();
+  const accent = css.getPropertyValue("--series-1").trim();
+  const surface = css.getPropertyValue("--surface-1").trim();
+  svg.innerHTML =
+    `<path d="${path}" fill="none" stroke="${muted}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>` +
+    `<circle cx="${lastX}" cy="${lastY}" r="6" fill="${surface}"/>` +
+    `<circle cx="${lastX}" cy="${lastY}" r="4" fill="${accent}"/>`;
+}
+
+function relTime(iso) {
+  const secs = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (secs < 60) return `${Math.floor(secs)}s ago`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  return `${Math.floor(secs / 3600)}h ago`;
+}
+
+function renderTable() {
+  const tbody = $("rows");
+  const bankroll = parseFloat($("bankroll").value) || 0;
+  const sorted = [...opportunities.values()].sort((a, b) => b.profit_margin - a.profit_margin);
+  $("empty").style.display = sorted.length ? "none" : "block";
+  tbody.replaceChildren(...sorted.map((o) => {
+    const tr = document.createElement("tr");
+    if (flashIds.has(o.id)) tr.className = "flash";
+    const kindLabel = o.kind === "cross_book" ? "Cross-book" : "Back/lay";
+    const legs = o.legs.map((l) => {
+      const stake = bankroll ? ` → ${fmtMoney(l.stake_fraction * bankroll)}` : "";
+      return `<li><span class="side">${l.side}</span> ${esc(l.outcome)} @ <span class="odds">${l.odds.toFixed(2)}</span> · ${esc(l.bookmaker)}<span class="stake">${stake}</span></li>`;
+    }).join("");
+    tr.innerHTML =
+      `<td class="num margin">${fmtPct(o.profit_margin)}</td>` +
+      `<td><span class="kind ${o.kind}"><span class="swatch"></span>${kindLabel}</span></td>` +
+      `<td><div class="event">${esc(o.event_name)}</div><div class="sport">${esc(o.sport)}</div></td>` +
+      `<td><ul class="legs">${legs}</ul></td>` +
+      `<td class="seen">${relTime(o.last_seen)}</td>`;
+    return tr;
+  }));
+  flashIds.clear(); // flash once per update, not on periodic re-renders
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+// ---- controls ----
+$("btnToggle").addEventListener("click", async () => {
+  $("btnToggle").disabled = true;
+  const resp = await fetch(running ? "/poller/stop" : "/poller/start", { method: "POST" });
+  updateStatus(await resp.json());
+});
+$("btnPoll").addEventListener("click", async () => {
+  const resp = await fetch("/poller/poll", { method: "POST" });
+  updateStatus(await resp.json());
+});
+$("interval").addEventListener("change", async () => {
+  const v = parseFloat($("interval").value);
+  if (!(v > 0)) return;
+  const resp = await fetch("/poller/config", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ poll_interval_seconds: v }),
+  });
+  updateStatus(await resp.json());
+});
+$("bankroll").addEventListener("input", renderTable);
+setInterval(() => { if (opportunities.size) renderTable(); }, 10000); // tick "last seen"
+
+connect();
+</script>
+</body>
+</html>

@@ -38,6 +38,21 @@ curl localhost:8000/markets                 # all tracked markets
 
 Interactive OpenAPI docs: http://localhost:8000/docs
 
+### Browser dashboard
+
+Open **http://localhost:8000/** for a live dashboard fed by the WebSocket
+stream — no build step, a single self-contained page:
+
+- stat tiles: best margin (with a sparkline over the last 12 polls), active
+  opportunity count with per-poll delta, markets tracked, poll stats
+- a live opportunities table sorted by margin; new and re-priced rows flash,
+  expired rows drop out
+- a bankroll input that turns each leg's stake fraction into a currency
+  amount to place
+- poller controls: start/stop, force a poll, change the interval — all
+  without leaving the page
+- automatic reconnect with backoff, light and dark theme
+
 ## Real data sources
 
 Copy `.env.example` to `.env` and configure:
@@ -68,6 +83,7 @@ implement `fetch_markets()` returning `MarketSnapshot`s, and register it in
 
 | Method | Path | Description |
 |---|---|---|
+| GET | `/` → `/dashboard` | Browser dashboard (live WebSocket view) |
 | GET | `/health` | Liveness check |
 | GET | `/status` | Poller state: last poll, duration, counts, errors |
 | GET | `/markets?source=&sport=` | All tracked market snapshots |
