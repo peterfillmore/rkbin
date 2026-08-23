@@ -1,12 +1,22 @@
-"""REST endpoints."""
+"""REST and WebSocket endpoints."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, Request
+import asyncio
+
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from pydantic import BaseModel, Field
 
 from .models import MarketSnapshot, Opportunity, PollerStatus
 from .poller import Poller
 from .store import Store
+from .ws import Broadcaster
 
 router = APIRouter()
 
@@ -94,6 +104,65 @@ async def poll_now(request: Request) -> PollerStatus:
     else:
         await poller.poll_once()
     return poller.status
+
+
+async def _drain_incoming(websocket: WebSocket) -> None:
+    """Consume (and ignore) client messages so disconnects are noticed."""
+    while True:
+        await websocket.receive_text()
+
+
+async def _forward_broadcasts(queue: asyncio.Queue, websocket: WebSocket) -> None:
+    while True:
+        message = await queue.get()
+        await websocket.send_json(message)
+
+
+@router.websocket("/ws")
+async def ws_opportunities(websocket: WebSocket) -> None:
+    """Stream arbitrage opportunities.
+
+    On connect the server sends a `snapshot` message with all currently
+    active opportunities; after every background poll it sends a `poll`
+    message containing the poller status plus `new`, `changed` (profit
+    margin moved) and `expired` (ids no longer active) opportunities.
+    """
+    store: Store = websocket.app.state.store
+    poller: Poller = websocket.app.state.poller
+    broadcaster: Broadcaster = websocket.app.state.broadcaster
+    await websocket.accept()
+    queue = broadcaster.subscribe()
+    tasks: set[asyncio.Task] = set()
+    try:
+        await websocket.send_json(
+            {
+                "type": "snapshot",
+                "status": poller.status.model_dump(mode="json"),
+                "opportunities": [
+                    o.model_dump(mode="json")
+                    for o in store.opportunities(active_only=True)
+                ],
+            }
+        )
+        tasks = {
+            asyncio.create_task(_drain_incoming(websocket)),
+            asyncio.create_task(_forward_broadcasts(queue, websocket)),
+        }
+        done, pending = await asyncio.wait(
+            tasks, return_when=asyncio.FIRST_COMPLETED
+        )
+        for task in pending:
+            task.cancel()
+        for task in done:
+            exc = task.exception()
+            if exc is not None and not isinstance(exc, WebSocketDisconnect):
+                raise exc
+    except WebSocketDisconnect:
+        pass
+    finally:
+        broadcaster.unsubscribe(queue)
+        for task in tasks:
+            task.cancel()
 
 
 class PollerConfig(BaseModel):

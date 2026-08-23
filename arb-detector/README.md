@@ -78,6 +78,46 @@ implement `fetch_markets()` returning `MarketSnapshot`s, and register it in
 | POST | `/poller/stop` | Stop background polling |
 | POST | `/poller/poll` | Force an immediate poll |
 | PATCH | `/poller/config` | Change the poll interval at runtime |
+| WS | `/ws` | Live stream: snapshot on connect, then per-poll updates |
+
+### WebSocket stream
+
+Connect to `ws://host:8000/ws` to get pushed updates instead of polling the
+REST endpoints. On connect the server sends the current state:
+
+```json
+{"type": "snapshot", "status": { ... }, "opportunities": [ ... ]}
+```
+
+Then, after every background poll, one message:
+
+```json
+{
+  "type": "poll",
+  "status": { "polls_completed": 42, "markets_tracked": 6, ... },
+  "new":     [ ...full opportunities first seen this poll... ],
+  "changed": [ ...opportunities whose profit margin moved... ],
+  "expired": [ "ids no longer active" ]
+}
+```
+
+Minimal client:
+
+```python
+import asyncio, json, websockets
+
+async def watch():
+    async with websockets.connect("ws://localhost:8000/ws") as ws:
+        async for raw in ws:
+            msg = json.loads(raw)
+            for opp in msg.get("new", []) + msg.get("opportunities", []):
+                print(f"{opp['profit_margin']:.2%}  {opp['event_name']}")
+
+asyncio.run(watch())
+```
+
+Slow consumers never stall the poller: each client has a bounded queue and
+the oldest unsent messages are dropped first.
 
 Example opportunity:
 

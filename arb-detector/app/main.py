@@ -14,6 +14,7 @@ from .config import get_settings
 from .poller import Poller
 from .sources import build_sources
 from .store import Store
+from .ws import Broadcaster
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -24,9 +25,11 @@ logging.basicConfig(
 async def lifespan(app: FastAPI):
     settings = get_settings()
     store = Store(opportunity_ttl_seconds=settings.opportunity_ttl_seconds)
-    poller = Poller(build_sources(settings), store, settings)
+    broadcaster = Broadcaster()
+    poller = Poller(build_sources(settings), store, settings, broadcaster)
     app.state.store = store
     app.state.poller = poller
+    app.state.broadcaster = broadcaster
     if settings.poll_on_startup:
         await poller.start()
     yield

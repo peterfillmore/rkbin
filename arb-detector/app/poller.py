@@ -11,17 +11,26 @@ from .matching import group_markets
 from .models import MarketSnapshot, PollerStatus, utcnow
 from .sources.base import OddsSource
 from .store import Store
+from .ws import Broadcaster
 
 logger = logging.getLogger(__name__)
 
 
 class Poller:
     def __init__(
-        self, sources: list[OddsSource], store: Store, settings: Settings
+        self,
+        sources: list[OddsSource],
+        store: Store,
+        settings: Settings,
+        broadcaster: Broadcaster | None = None,
     ) -> None:
         self._sources = sources
         self._store = store
         self._settings = settings
+        self._broadcaster = broadcaster
+        # opportunity id -> profit margin as of the last published message,
+        # used to diff polls into new/changed/expired WebSocket events.
+        self._last_published: dict[str, float] = {}
         self._task: asyncio.Task | None = None
         self._wake = asyncio.Event()
         self._started_sources = False
@@ -128,3 +137,29 @@ class Poller:
                 len(found),
                 found[0].profit_margin * 100,
             )
+        self._broadcast_poll_result()
+
+    def _broadcast_poll_result(self) -> None:
+        if self._broadcaster is None:
+            return
+        current = {o.id: o for o in self._store.opportunities(active_only=True)}
+        new = [o for oid, o in current.items() if oid not in self._last_published]
+        changed = [
+            o
+            for oid, o in current.items()
+            if oid in self._last_published
+            and o.profit_margin != self._last_published[oid]
+        ]
+        expired = sorted(set(self._last_published) - set(current))
+        self._last_published = {
+            oid: o.profit_margin for oid, o in current.items()
+        }
+        self._broadcaster.publish(
+            {
+                "type": "poll",
+                "status": self.status.model_dump(mode="json"),
+                "new": [o.model_dump(mode="json") for o in new],
+                "changed": [o.model_dump(mode="json") for o in changed],
+                "expired": expired,
+            }
+        )
