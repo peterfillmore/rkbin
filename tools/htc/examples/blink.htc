@@ -1,0 +1,26 @@
+// Blink an LED on PA0 using a software delay.
+//
+// Build:  htc build examples/blink.htc
+// Try it: htc run examples/blink.htc --cycles 20000 --trace | tail
+
+// The watchdog is enabled after reset (WDTC = 53h).  Either clear it
+// regularly with clr_wdt() or disable it: WE4..WE0 = 10101b.
+const u8 WDT_DISABLE = 0xA8;
+
+void delay(u16 loops) {
+    while (loops != 0) {
+        loops--;
+        clr_wdt();
+    }
+}
+
+void main() {
+    WDTC = WDT_DISABLE | 0x03;
+    PAC = 0xFE;          // PA0 output, others input
+    PAPU = 0xFE;         // pull-highs on the inputs
+    PA = 0;
+    while (true) {
+        PA.0 = !PA.0;    // toggle the LED
+        delay(20000);
+    }
+}

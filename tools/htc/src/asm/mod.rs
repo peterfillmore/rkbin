@@ -158,10 +158,22 @@ impl<'r> Assembler<'r> {
     pub fn new(resolver: &'r dyn IncludeResolver) -> Self {
         let mut symbols = HashMap::new();
         for &(name, addr) in device::SFR_TABLE {
-            symbols.insert(name.to_ascii_lowercase(), Symbol { value: addr as i64, kind: SymKind::Mem });
+            symbols.insert(
+                name.to_ascii_lowercase(),
+                Symbol {
+                    value: addr as i64,
+                    kind: SymKind::Mem,
+                },
+            );
         }
         for &(name, reg, bit) in device::BIT_TABLE {
-            symbols.insert(name.to_ascii_lowercase(), Symbol { value: reg as i64, kind: SymKind::Bit(bit) });
+            symbols.insert(
+                name.to_ascii_lowercase(),
+                Symbol {
+                    value: reg as i64,
+                    kind: SymKind::Bit(bit),
+                },
+            );
         }
         Assembler {
             symbols,
@@ -206,7 +218,11 @@ impl<'r> Assembler<'r> {
 
     fn assemble_text(&mut self, file: &str, source: &str) {
         for (idx, text) in source.lines().enumerate() {
-            let line = Line { file, line: idx + 1, text };
+            let line = Line {
+                file,
+                line: idx + 1,
+                text,
+            };
             let addr_before = self.pc;
             let words_before = self.image.end();
             let start_listing = self.listing.len();
@@ -225,7 +241,11 @@ impl<'r> Assembler<'r> {
                 }
                 self.listing.push(ListingLine {
                     line: line.line,
-                    address: if self.section == Section::Code { Some(addr_before as u16) } else { None },
+                    address: if self.section == Section::Code {
+                        Some(addr_before as u16)
+                    } else {
+                        None
+                    },
                     words,
                     source: text.to_string(),
                 });
@@ -234,7 +254,11 @@ impl<'r> Assembler<'r> {
     }
 
     fn error(&mut self, line: &Line, msg: impl Into<String>) {
-        self.errors.push(AsmError { file: line.file.to_string(), line: line.line, message: msg.into() });
+        self.errors.push(AsmError {
+            file: line.file.to_string(),
+            line: line.line,
+            message: msg.into(),
+        });
     }
 
     fn assemble_line(&mut self, line: &Line) {
@@ -261,7 +285,11 @@ impl<'r> Assembler<'r> {
                 self.define_label(line, &lname);
                 pos = 2;
             } else if next_is_defining {
-                let d = if let TokenKind::Ident(d) = &tokens[1].kind { d.to_ascii_lowercase() } else { unreachable!() };
+                let d = if let TokenKind::Ident(d) = &tokens[1].kind {
+                    d.to_ascii_lowercase()
+                } else {
+                    unreachable!()
+                };
                 self.directive_with_name(line, &lname, &d, &tokens[2..]);
                 return;
             }
@@ -292,7 +320,10 @@ impl<'r> Assembler<'r> {
         } else if is_mnemonic(&mnemonic) {
             self.instruction(line, &mnemonic, rest);
         } else {
-            self.error(line, format!("unknown mnemonic or directive '{}'", mnemonic));
+            self.error(
+                line,
+                format!("unknown mnemonic or directive '{}'", mnemonic),
+            );
         }
     }
 
@@ -348,15 +379,36 @@ impl<'r> Assembler<'r> {
                     return;
                 }
                 match self.parse_arg(line, args[0]) {
-                    Arg::Mem(a) => self.define(line, name, Symbol { value: a, kind: SymKind::Mem }),
+                    Arg::Mem(a) => self.define(
+                        line,
+                        name,
+                        Symbol {
+                            value: a,
+                            kind: SymKind::Mem,
+                        },
+                    ),
                     Arg::Bit(a, b) => {
                         if !(0..8).contains(&b) {
                             self.error(line, "bit number must be 0..7");
                             return;
                         }
-                        self.define(line, name, Symbol { value: a, kind: SymKind::Bit(b as u8) })
+                        self.define(
+                            line,
+                            name,
+                            Symbol {
+                                value: a,
+                                kind: SymKind::Bit(b as u8),
+                            },
+                        )
                     }
-                    Arg::Num(v) => self.define(line, name, Symbol { value: v, kind: SymKind::Num }),
+                    Arg::Num(v) => self.define(
+                        line,
+                        name,
+                        Symbol {
+                            value: v,
+                            kind: SymKind::Num,
+                        },
+                    ),
                     Arg::Unknown => {
                         if self.pass == 2 {
                             self.error(line, "cannot resolve equ value");
@@ -382,7 +434,14 @@ impl<'r> Assembler<'r> {
                         }
                     };
                     let addr = self.ram;
-                    self.define(line, name, Symbol { value: addr, kind: SymKind::Mem });
+                    self.define(
+                        line,
+                        name,
+                        Symbol {
+                            value: addr,
+                            kind: SymKind::Mem,
+                        },
+                    );
                     self.reserve(line, size);
                 } else {
                     self.define_label(line, name);
@@ -403,7 +462,10 @@ impl<'r> Assembler<'r> {
     fn reserve(&mut self, line: &Line, size: i64) {
         let count = size.max(0);
         if self.ram + count > 0x100 {
-            self.error(line, format!("data memory overflow: {} bytes at {:02x}h", count, self.ram));
+            self.error(
+                line,
+                format!("data memory overflow: {} bytes at {:02x}h", count, self.ram),
+            );
         }
         self.ram += count;
         if self.ram > self.ram_end {
@@ -427,7 +489,10 @@ impl<'r> Assembler<'r> {
                 match self.section {
                     Section::Code => {
                         if !(0..=device::PROGRAM_LAST as i64).contains(&v) {
-                            self.error(line, format!("org address {:x}h outside program memory", v));
+                            self.error(
+                                line,
+                                format!("org address {:x}h outside program memory", v),
+                            );
                             return;
                         }
                         self.pc = v;
@@ -490,8 +555,14 @@ impl<'r> Assembler<'r> {
             }
             ".section" | "section" => {
                 // `.section 'data'` / `.section at 0 'code'`
-                let is_data = rest.iter().any(|t| matches!(&t.kind, TokenKind::Str(s) if s.eq_ignore_ascii_case("data")));
-                self.section = if is_data { Section::Data } else { Section::Code };
+                let is_data = rest.iter().any(
+                    |t| matches!(&t.kind, TokenKind::Str(s) if s.eq_ignore_ascii_case("data")),
+                );
+                self.section = if is_data {
+                    Section::Data
+                } else {
+                    Section::Code
+                };
             }
             ".data" => self.section = Section::Data,
             ".code" | ".text" => self.section = Section::Code,
@@ -528,7 +599,8 @@ impl<'r> Assembler<'r> {
                     None => self.error(line, format!("cannot read include file '{}'", name)),
                 }
             }
-            "end" | "public" | "extern" | ".list" | ".nolist" | "list" | "nolist" | "rom" | "ram" | "device" | "chip" => {}
+            "end" | "public" | "extern" | ".list" | ".nolist" | "list" | "nolist" | "rom"
+            | "ram" | "device" | "chip" => {}
             _ => self.error(line, format!("unknown directive '{}'", directive)),
         }
     }
@@ -543,7 +615,10 @@ impl<'r> Assembler<'r> {
         }
         if self.pass == 2 {
             if self.image.is_used(self.pc as u16) {
-                self.error(line, format!("program address {:03x}h assembled twice", self.pc));
+                self.error(
+                    line,
+                    format!("program address {:03x}h assembled twice", self.pc),
+                );
             }
             self.image.set(self.pc as u16, word);
         }
@@ -611,8 +686,14 @@ impl<'r> Assembler<'r> {
         if tokens.len() == 1 {
             if let TokenKind::Ident(name) = &tokens[0].kind {
                 match self.symbols.get(&name.to_ascii_lowercase()).copied() {
-                    Some(Symbol { value, kind: SymKind::Mem }) => return Arg::Mem(value),
-                    Some(Symbol { value, kind: SymKind::Bit(b) }) => return Arg::Bit(value, b as i64),
+                    Some(Symbol {
+                        value,
+                        kind: SymKind::Mem,
+                    }) => return Arg::Mem(value),
+                    Some(Symbol {
+                        value,
+                        kind: SymKind::Bit(b),
+                    }) => return Arg::Bit(value, b as i64),
                     _ => {}
                 }
             }
@@ -653,7 +734,7 @@ impl<'r> Assembler<'r> {
             }
             args.push(self.parse_arg(line, a));
         }
-        if args.iter().any(|a| *a == Arg::Unknown) {
+        if args.contains(&Arg::Unknown) {
             // Unresolved in pass 1: reserve the word.
             self.emit_word(line, 0);
             return;
@@ -797,16 +878,17 @@ fn matching_bracket(tokens: &[Token], open: usize) -> Option<usize> {
 }
 
 const MNEMONICS: &[&str] = &[
-    "nop", "halt", "ret", "reti", "clr", "set", "sz", "snz", "mov", "add", "sub", "and", "or", "xor",
-    "addm", "subm", "andm", "orm", "xorm", "adc", "adcm", "sbc", "sbcm", "jmp", "call", "cpla", "cpl",
-    "sza", "swapa", "swap", "inca", "inc", "deca", "dec", "siza", "siz", "sdza", "sdz", "rla", "rl",
-    "rra", "rr", "rlca", "rlc", "rrca", "rrc", "tabrd", "tabrdc", "tabrdl", "daa",
+    "nop", "halt", "ret", "reti", "clr", "set", "sz", "snz", "mov", "add", "sub", "and", "or",
+    "xor", "addm", "subm", "andm", "orm", "xorm", "adc", "adcm", "sbc", "sbcm", "jmp", "call",
+    "cpla", "cpl", "sza", "swapa", "swap", "inca", "inc", "deca", "dec", "siza", "siz", "sdza",
+    "sdz", "rla", "rl", "rra", "rr", "rlca", "rlc", "rrca", "rrc", "tabrd", "tabrdc", "tabrdl",
+    "daa",
 ];
 
 const DIRECTIVES: &[&str] = &[
-    "org", "dc", "dw", "db", "ds", "equ", "end", "include", "#include", ".include", "public", "extern",
-    ".section", "section", ".data", ".code", ".text", ".list", ".nolist", "list", "nolist", "rom", "ram",
-    "device", "chip",
+    "org", "dc", "dw", "db", "ds", "equ", "end", "include", "#include", ".include", "public",
+    "extern", ".section", "section", ".data", ".code", ".text", ".list", ".nolist", "list",
+    "nolist", "rom", "ram", "device", "chip",
 ];
 
 fn is_mnemonic(s: &str) -> bool {
@@ -831,9 +913,18 @@ pub fn assemble_str(file: &str, source: &str) -> Result<Assembled, Vec<AsmError>
 pub fn format_listing(listing: &[ListingLine]) -> String {
     let mut out = String::new();
     for l in listing {
-        let addr = l.address.map(|a| format!("{:04X}", a)).unwrap_or_else(|| "    ".into());
+        let addr = l
+            .address
+            .map(|a| format!("{:04X}", a))
+            .unwrap_or_else(|| "    ".into());
         let words: Vec<String> = l.words.iter().map(|w| format!("{:04X}", w)).collect();
-        out.push_str(&format!("{:5} {} {:<9} {}\n", l.line, addr, words.join(" "), l.source));
+        out.push_str(&format!(
+            "{:5} {} {:<9} {}\n",
+            l.line,
+            addr,
+            words.join(" "),
+            l.source
+        ));
     }
     out
 }
@@ -845,7 +936,13 @@ mod tests {
     fn asm(src: &str) -> Assembled {
         match assemble_str("test.asm", src) {
             Ok(a) => a,
-            Err(errs) => panic!("{}", errs.iter().map(|e| e.to_string()).collect::<Vec<_>>().join("\n")),
+            Err(errs) => panic!(
+                "{}",
+                errs.iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ),
         }
     }
 
@@ -876,7 +973,10 @@ mod tests {
         let w: Vec<u16> = (0..13).map(|i| a.image.get(i)).collect();
         assert_eq!(
             w,
-            vec![0x0F06, 0x0087, 0x0F0F, 0x0089, 0x1487, 0x3D0A, 0x1489, 0x1D01, 0x1081, 0x280B, 0x2804, 0x0708, 0x0005]
+            vec![
+                0x0F06, 0x0087, 0x0F0F, 0x0089, 0x1487, 0x3D0A, 0x1489, 0x1D01, 0x1081, 0x280B,
+                0x2804, 0x0708, 0x0005
+            ]
         );
         assert_eq!(a.image.get(13), 0x05A0);
         assert_eq!(a.image.get(14), 0x1785);
@@ -917,7 +1017,10 @@ mod tests {
 
     #[test]
     fn errors_are_reported() {
-        let e = match assemble_str("t.asm", "mov a, nosuch\n bogus\n mov [300h], a\n") { Err(e) => e, Ok(_) => panic!("expected errors") };
+        let e = match assemble_str("t.asm", "mov a, nosuch\n bogus\n mov [300h], a\n") {
+            Err(e) => e,
+            Ok(_) => panic!("expected errors"),
+        };
         assert_eq!(e.len(), 3);
         assert!(e[0].message.contains("undefined symbol"));
         assert!(e[1].message.contains("unknown mnemonic"));

@@ -80,9 +80,15 @@ pub fn tokenize(line: &str) -> Result<Vec<Token>, String> {
                 }
                 // Single-character single-quoted literals are numbers.
                 if quote == '\'' && s.chars().count() == 1 {
-                    tokens.push(Token { kind: TokenKind::Number(s.chars().next().unwrap() as i64), col });
+                    tokens.push(Token {
+                        kind: TokenKind::Number(s.chars().next().unwrap() as i64),
+                        col,
+                    });
                 } else {
-                    tokens.push(Token { kind: TokenKind::Str(s), col });
+                    tokens.push(Token {
+                        kind: TokenKind::Str(s),
+                        col,
+                    });
                 }
             }
             c if c.is_ascii_digit() => {
@@ -91,31 +97,52 @@ pub fn tokenize(line: &str) -> Result<Vec<Token>, String> {
                     i += 1;
                 }
                 let text: String = chars[start..i].iter().filter(|c| **c != '_').collect();
-                let value = parse_number(&text).ok_or_else(|| format!("invalid number '{}'", text))?;
-                tokens.push(Token { kind: TokenKind::Number(value), col });
+                let value =
+                    parse_number(&text).ok_or_else(|| format!("invalid number '{}'", text))?;
+                tokens.push(Token {
+                    kind: TokenKind::Number(value),
+                    col,
+                });
             }
             c if c.is_alphabetic() || c == '_' || c == '@' => {
                 let start = i;
-                while i < chars.len() && (chars[i].is_alphanumeric() || chars[i] == '_' || chars[i] == '@') {
+                while i < chars.len()
+                    && (chars[i].is_alphanumeric() || chars[i] == '_' || chars[i] == '@')
+                {
                     i += 1;
                 }
                 let text: String = chars[start..i].iter().collect();
-                tokens.push(Token { kind: TokenKind::Ident(text), col });
+                tokens.push(Token {
+                    kind: TokenKind::Ident(text),
+                    col,
+                });
             }
             '.' => {
-                tokens.push(Token { kind: TokenKind::Dot, col });
+                tokens.push(Token {
+                    kind: TokenKind::Dot,
+                    col,
+                });
                 i += 1;
             }
             '#' => {
-                tokens.push(Token { kind: TokenKind::Hash, col });
+                tokens.push(Token {
+                    kind: TokenKind::Hash,
+                    col,
+                });
                 i += 1;
             }
             '<' if chars.get(i + 1) == Some(&'<') => {
-                tokens.push(Token { kind: TokenKind::Shl, col });
+                tokens.push(Token {
+                    kind: TokenKind::Shl,
+                    col,
+                });
                 i += 2;
             }
             '>' if chars.get(i + 1) == Some(&'>') => {
-                tokens.push(Token { kind: TokenKind::Shr, col });
+                tokens.push(Token {
+                    kind: TokenKind::Shr,
+                    col,
+                });
                 i += 2;
             }
             _ => {
@@ -148,7 +175,10 @@ pub fn tokenize(line: &str) -> Result<Vec<Token>, String> {
     // `#include` → merge hash + ident into one directive ident.
     if tokens.len() >= 2 && tokens[0].kind == TokenKind::Hash {
         if let TokenKind::Ident(s) = &tokens[1].kind {
-            let merged = Token { kind: TokenKind::Ident(format!("#{}", s)), col: tokens[0].col };
+            let merged = Token {
+                kind: TokenKind::Ident(format!("#{}", s)),
+                col: tokens[0].col,
+            };
             tokens.splice(0..2, [merged]);
         }
     }

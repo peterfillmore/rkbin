@@ -1,0 +1,30 @@
+// Constant tables in program memory, 16-bit arithmetic and a moving average.
+//
+// Run in the simulator and inspect RAM:
+//     htc run examples/lookup_table.htc --dump 0x80-0x9f
+
+const u8 SINE[16] = {128, 176, 218, 245, 255, 245, 218, 176, 128, 79, 37, 10, 0, 10, 37, 79};
+const u16 THRESHOLDS[] = {100, 1000, 10000, 60000};
+
+u8 samples[8];
+u16 sum;
+u8 average;
+u8 bucket;
+
+u8 classify(u16 value) {
+    u8 i;
+    for (i = 0; i < 4; i++) {
+        if (value < THRESHOLDS[i]) return i;
+    }
+    return 4;
+}
+
+void main() {
+    u8 i;
+    for (i = 0; i < 8; i++) {
+        samples[i] = SINE[i * 2];
+        sum += samples[i];
+    }
+    average = (u8)(sum / 8);          // 16-bit divide, runtime routine
+    bucket = classify(sum * 12);      // 2540 -> bucket 3
+}

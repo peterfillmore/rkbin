@@ -1,0 +1,30 @@
+// Time Base 0 interrupt: count ticks and produce a slow square wave on PA1.
+//
+// The Time Base clock fTB comes from fSYS/4 (TBCK = 1); TB0 overflows every
+// 2^(8+n) fTB cycles where n = TB02..TB00.  With fSYS = 8 MHz and n = 7 the
+// interrupt fires every 2^15 / 2 MHz = 16.4 ms.
+
+u8 ticks;
+u16 seconds;
+
+interrupt TB0 void on_timebase0() {
+    ticks++;
+    if (ticks == 61) {        // ~1 s
+        ticks = 0;
+        seconds++;
+        PA.1 = !PA.1;
+    }
+}
+
+void main() {
+    WDTC = 0xA8 | 0x03;       // watchdog off
+    PAC = 0xFC;               // PA0, PA1 outputs
+    PA = 0;
+    TBC = 0x80 | 0x40 | 0x07; // TBON, TBCK = fSYS/4, TB0 period 2^15/fTB
+    TB0E = 1;                 // enable the Time Base 0 interrupt (INTC1.3)
+    ei();                     // global enable (INTC0.0)
+    while (true) {
+        // Foreground work: mirror the second counter's LSB on PA0.
+        PA.0 = (u8)seconds & 1;
+    }
+}

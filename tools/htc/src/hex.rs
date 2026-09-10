@@ -23,7 +23,10 @@ impl Default for Image {
 
 impl Image {
     pub fn new() -> Self {
-        Image { words: vec![0; PROGRAM_WORDS], used: vec![false; PROGRAM_WORDS] }
+        Image {
+            words: vec![0; PROGRAM_WORDS],
+            used: vec![false; PROGRAM_WORDS],
+        }
     }
 
     pub fn set(&mut self, addr: u16, word: u16) {
@@ -46,7 +49,11 @@ impl Image {
 
     /// Address one past the last used word (0 if empty).
     pub fn end(&self) -> usize {
-        self.used.iter().rposition(|&u| u).map(|p| p + 1).unwrap_or(0)
+        self.used
+            .iter()
+            .rposition(|&u| u)
+            .map(|p| p + 1)
+            .unwrap_or(0)
     }
 
     /// Number of used words.
@@ -98,7 +105,7 @@ impl Image {
 
     /// Parse a raw little-endian binary.
     pub fn from_binary(bytes: &[u8]) -> Result<Image, ImageError> {
-        if bytes.len() % 2 != 0 {
+        if !bytes.len().is_multiple_of(2) {
             return Err(ImageError::OddLength);
         }
         if bytes.len() / 2 > PROGRAM_WORDS {
@@ -124,7 +131,8 @@ impl Image {
             let line = line
                 .strip_prefix(':')
                 .ok_or(ImageError::Syntax(lineno + 1, "missing ':'"))?;
-            let bytes = parse_hex_bytes(line).ok_or(ImageError::Syntax(lineno + 1, "bad hex digits"))?;
+            let bytes =
+                parse_hex_bytes(line).ok_or(ImageError::Syntax(lineno + 1, "bad hex digits"))?;
             if bytes.len() < 5 {
                 return Err(ImageError::Syntax(lineno + 1, "record too short"));
             }
@@ -144,7 +152,7 @@ impl Image {
                         if word_addr >= PROGRAM_WORDS {
                             return Err(ImageError::TooLarge(word_addr + 1));
                         }
-                        if byte_addr % 2 == 0 {
+                        if byte_addr.is_multiple_of(2) {
                             pending = Some((word_addr, *b));
                         } else {
                             let low = match pending.take() {
@@ -186,7 +194,7 @@ fn push_record(out: &mut String, bytes: &[u8]) {
 }
 
 fn parse_hex_bytes(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 != 0 {
+    if !s.len().is_multiple_of(2) {
         return None;
     }
     (0..s.len())
@@ -206,7 +214,11 @@ impl fmt::Display for ImageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ImageError::OddLength => write!(f, "binary image has an odd number of bytes"),
-            ImageError::TooLarge(w) => write!(f, "image needs {} words but the device has {}", w, PROGRAM_WORDS),
+            ImageError::TooLarge(w) => write!(
+                f,
+                "image needs {} words but the device has {}",
+                w, PROGRAM_WORDS
+            ),
             ImageError::Syntax(l, m) => write!(f, "hex line {}: {}", l, m),
         }
     }

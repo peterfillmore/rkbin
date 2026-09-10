@@ -1,0 +1,47 @@
+// UART echo with a lookup-table based hex dump of every received byte.
+//
+// Baud rate (BRGH = 0): fSYS / (64 * (N + 1)).  With fSYS = 8 MHz, N = 12
+// gives 9615 baud (0.16 % error).  The TX/RX pins are pin-shared; consult
+// the datasheet's pin-shared function section for your package.
+
+const u8 HEX[] = "0123456789ABCDEF";
+
+// UCR1 bits
+const u8 UARTEN = 0x80;
+// UCR2 bits
+const u8 TXEN = 0x80;
+const u8 RXEN = 0x40;
+
+void uart_init(u8 brg) {
+    BRG = brg;
+    UCR1 = UARTEN;        // 8 data bits, no parity, 1 stop bit
+    UCR2 = TXEN | RXEN;   // BRGH = 0
+}
+
+void uart_put(u8 c) {
+    while (!USR.0) { }    // wait for TXIF (transmit register empty)
+    TXR_RXR = c;
+}
+
+u8 uart_get() {
+    while (!USR.2) { }    // wait for RXIF
+    return TXR_RXR;
+}
+
+void put_hex(u8 v) {
+    uart_put(HEX[v >> 4]);
+    uart_put(HEX[v & 0x0F]);
+}
+
+void main() {
+    WDTC = 0xA8 | 0x03;   // watchdog off
+    uart_init(12);
+    while (true) {
+        u8 c = uart_get();
+        uart_put(c);
+        uart_put(' ');
+        put_hex(c);
+        uart_put('\r');
+        uart_put('\n');
+    }
+}

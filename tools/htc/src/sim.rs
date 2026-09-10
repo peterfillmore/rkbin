@@ -34,7 +34,9 @@ impl fmt::Display for Stop {
         match self {
             Stop::Halt => write!(f, "halt"),
             Stop::CycleLimit => write!(f, "cycle limit reached"),
-            Stop::IllegalInstruction(a, w) => write!(f, "illegal instruction {:04x} at {:03x}", w, a),
+            Stop::IllegalInstruction(a, w) => {
+                write!(f, "illegal instruction {:04x} at {:03x}", w, a)
+            }
             Stop::StackOverflow => write!(f, "hardware stack overflow"),
             Stop::StackUnderflow => write!(f, "hardware stack underflow"),
             Stop::Breakpoint(a) => write!(f, "breakpoint at {:03x}", a),
@@ -223,10 +225,26 @@ impl Cpu {
         let r = sum as u8;
         let mut set = 0;
         let mut clear = 0;
-        if sum > 0xFF { set |= C } else { clear |= C }
-        if (a & 0x0F) + (b & 0x0F) + carry_in > 0x0F { set |= AC } else { clear |= AC }
-        if ((a ^ r) & (b ^ r) & 0x80) != 0 { set |= OV } else { clear |= OV }
-        if r == 0 { set |= Z } else { clear |= Z }
+        if sum > 0xFF {
+            set |= C
+        } else {
+            clear |= C
+        }
+        if (a & 0x0F) + (b & 0x0F) + carry_in > 0x0F {
+            set |= AC
+        } else {
+            clear |= AC
+        }
+        if ((a ^ r) & (b ^ r) & 0x80) != 0 {
+            set |= OV
+        } else {
+            clear |= OV
+        }
+        if r == 0 {
+            set |= Z
+        } else {
+            clear |= Z
+        }
         self.set_flags(set, clear);
         r
     }
@@ -237,10 +255,26 @@ impl Cpu {
         let r = diff as u8;
         let mut set = 0;
         let mut clear = 0;
-        if diff >= 0 { set |= C } else { clear |= C }
-        if (a & 0x0F) as i16 - (b & 0x0F) as i16 - borrow_in as i16 >= 0 { set |= AC } else { clear |= AC }
-        if ((a ^ b) & (a ^ r) & 0x80) != 0 { set |= OV } else { clear |= OV }
-        if r == 0 { set |= Z } else { clear |= Z }
+        if diff >= 0 {
+            set |= C
+        } else {
+            clear |= C
+        }
+        if (a & 0x0F) as i16 - (b & 0x0F) as i16 - borrow_in as i16 >= 0 {
+            set |= AC
+        } else {
+            clear |= AC
+        }
+        if ((a ^ b) & (a ^ r) & 0x80) != 0 {
+            set |= OV
+        } else {
+            clear |= OV
+        }
+        if r == 0 {
+            set |= Z
+        } else {
+            clear |= Z
+        }
         self.set_flags(set, clear);
         r
     }
@@ -293,9 +327,21 @@ impl Cpu {
             Operand::Mem(m) | Operand::Bit(m, _) => m,
             _ => 0,
         };
-        let bitno = if let Operand::Bit(_, b) = ins.operand { b } else { 0 };
-        let imm = if let Operand::Imm(x) = ins.operand { x } else { 0 };
-        let target = if let Operand::Addr(a) = ins.operand { a } else { 0 };
+        let bitno = if let Operand::Bit(_, b) = ins.operand {
+            b
+        } else {
+            0
+        };
+        let imm = if let Operand::Imm(x) = ins.operand {
+            x
+        } else {
+            0
+        };
+        let target = if let Operand::Addr(a) = ins.operand {
+            a
+        } else {
+            0
+        };
 
         match ins.op {
             Op::Nop => {}
@@ -489,7 +535,10 @@ impl Cpu {
                 let v = self.read(m);
                 let cin = self.status() & C;
                 let r = (v << 1) | cin;
-                self.set_flags(if v & 0x80 != 0 { C } else { 0 }, if v & 0x80 != 0 { 0 } else { C });
+                self.set_flags(
+                    if v & 0x80 != 0 { C } else { 0 },
+                    if v & 0x80 != 0 { 0 } else { C },
+                );
                 if ins.op == Op::Rlca {
                     self.ram0[sfr::ACC as usize] = r;
                 } else {
@@ -500,7 +549,10 @@ impl Cpu {
                 let v = self.read(m);
                 let cin = self.status() & C;
                 let r = (v >> 1) | (cin << 7);
-                self.set_flags(if v & 1 != 0 { C } else { 0 }, if v & 1 != 0 { 0 } else { C });
+                self.set_flags(
+                    if v & 1 != 0 { C } else { 0 },
+                    if v & 1 != 0 { 0 } else { C },
+                );
                 if ins.op == Op::Rrca {
                     self.ram0[sfr::ACC as usize] = r;
                 } else {
@@ -685,7 +737,9 @@ mod tests {
 
     #[test]
     fn pcl_jump_and_interrupt() {
-        let a = assemble_str("t.asm", "
+        let a = assemble_str(
+            "t.asm",
+            "
             jmp start
             org 4
             inc [90h]
@@ -699,7 +753,9 @@ mod tests {
             mov [91h], a
           target:
             halt
-        ").unwrap();
+        ",
+        )
+        .unwrap();
         let mut cpu = Cpu::new(&a.image);
         assert_eq!(cpu.run(6), Stop::CycleLimit);
         assert!(cpu.interrupt(0x04));

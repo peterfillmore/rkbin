@@ -231,7 +231,10 @@ impl OperandKind {
 
 impl Op {
     pub fn info(self) -> &'static OpInfo {
-        OPCODES.iter().find(|i| i.op == self).expect("opcode in table")
+        OPCODES
+            .iter()
+            .find(|i| i.op == self)
+            .expect("opcode in table")
     }
 
     pub fn kind(self) -> OperandKind {
@@ -269,7 +272,11 @@ impl fmt::Display for EncodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             EncodeError::OperandMismatch { op, operand } => {
-                write!(f, "operand {:?} does not match instruction {:?}", operand, op)
+                write!(
+                    f,
+                    "operand {:?} does not match instruction {:?}",
+                    operand, op
+                )
             }
             EncodeError::AddressOutOfRange(a) => {
                 write!(f, "program address {:#05x} exceeds 4K words", a)
@@ -287,29 +294,47 @@ impl Instruction {
     }
 
     pub const fn simple(op: Op) -> Self {
-        Instruction { op, operand: Operand::None }
+        Instruction {
+            op,
+            operand: Operand::None,
+        }
     }
 
     pub const fn mem(op: Op, m: u8) -> Self {
-        Instruction { op, operand: Operand::Mem(m) }
+        Instruction {
+            op,
+            operand: Operand::Mem(m),
+        }
     }
 
     pub const fn imm(op: Op, x: u8) -> Self {
-        Instruction { op, operand: Operand::Imm(x) }
+        Instruction {
+            op,
+            operand: Operand::Imm(x),
+        }
     }
 
     pub const fn addr(op: Op, a: u16) -> Self {
-        Instruction { op, operand: Operand::Addr(a) }
+        Instruction {
+            op,
+            operand: Operand::Addr(a),
+        }
     }
 
     pub const fn bit(op: Op, m: u8, i: u8) -> Self {
-        Instruction { op, operand: Operand::Bit(m, i) }
+        Instruction {
+            op,
+            operand: Operand::Bit(m, i),
+        }
     }
 
     /// Encode into a 16-bit program-memory word.
     pub fn encode(&self) -> Result<u16, EncodeError> {
         let info = self.op.info();
-        let mismatch = || EncodeError::OperandMismatch { op: self.op, operand: self.operand };
+        let mismatch = || EncodeError::OperandMismatch {
+            op: self.op,
+            operand: self.operand,
+        };
         match (info.kind, self.operand) {
             (OperandKind::None, Operand::None) => Ok(info.base),
             (OperandKind::Mem, Operand::Mem(m)) => Ok(info.base | encode_mem(m)),
@@ -332,6 +357,10 @@ impl Instruction {
 
     /// Decode a program-memory word.  Returns `None` for undefined encodings.
     pub fn decode(word: u16) -> Option<Instruction> {
+        // Bit 15 is never set in a valid HT66F0185 instruction word.
+        if word & 0x8000 != 0 {
+            return None;
+        }
         // Order matters: the no-operand class must be tried first, and the
         // classes are otherwise disjoint by construction.
         for kind in [
@@ -350,7 +379,10 @@ impl Instruction {
                     OperandKind::Addr => Operand::Addr((word & 0x07FF) | ((word >> 3) & 0x0800)),
                     OperandKind::Bit => Operand::Bit(decode_mem(word), ((word >> 7) & 7) as u8),
                 };
-                return Some(Instruction { op: info.op, operand });
+                return Some(Instruction {
+                    op: info.op,
+                    operand,
+                });
             }
         }
         None
@@ -376,16 +408,29 @@ impl fmt::Display for Instruction {
         let mn = self.op.mnemonic();
         match (self.op, self.operand) {
             (_, Operand::None) => write!(f, "{}", mn),
-            (Op::MovMA, Operand::Mem(m)) => write!(f, "mov [{:02x}h],a", m),
+            (Op::MovMA, Operand::Mem(m)) => write!(f, "mov [0{:02x}h],a", m),
             (
-                Op::Sub | Op::Subm | Op::Add | Op::Addm | Op::Xor | Op::Xorm | Op::Or | Op::Orm
-                | Op::And | Op::Andm | Op::MovAM | Op::Sbc | Op::Sbcm | Op::Adc | Op::Adcm,
+                Op::Sub
+                | Op::Subm
+                | Op::Add
+                | Op::Addm
+                | Op::Xor
+                | Op::Xorm
+                | Op::Or
+                | Op::Orm
+                | Op::And
+                | Op::Andm
+                | Op::MovAM
+                | Op::Sbc
+                | Op::Sbcm
+                | Op::Adc
+                | Op::Adcm,
                 Operand::Mem(m),
-            ) => write!(f, "{} a,[{:02x}h]", mn, m),
-            (_, Operand::Mem(m)) => write!(f, "{} [{:02x}h]", mn, m),
-            (_, Operand::Imm(x)) => write!(f, "{} a,{:02x}h", mn, x),
-            (_, Operand::Addr(a)) => write!(f, "{} {:03x}h", mn, a),
-            (_, Operand::Bit(m, i)) => write!(f, "{} [{:02x}h].{}", mn, m, i),
+            ) => write!(f, "{} a,[0{:02x}h]", mn, m),
+            (_, Operand::Mem(m)) => write!(f, "{} [0{:02x}h]", mn, m),
+            (_, Operand::Imm(x)) => write!(f, "{} a,0{:02x}h", mn, x),
+            (_, Operand::Addr(a)) => write!(f, "{} 0{:03x}h", mn, a),
+            (_, Operand::Bit(m, i)) => write!(f, "{} [0{:02x}h].{}", mn, m, i),
         }
     }
 }
@@ -399,12 +444,12 @@ mod tests {
         // Values taken from HT-IDE3000 `HGASM` listing files.
         let cases = [
             (Instruction::bit(Op::SzBit, 0x0A, 2), 0x3D0A), // sz z
-            (Instruction::mem(Op::Inc, 0x07), 0x1487),       // inc tblp
-            (Instruction::mem(Op::Tabrd, 0x01), 0x1D01),     // tabrd mp0
-            (Instruction::mem(Op::MovAM, 0x08), 0x0708),     // mov a,tblh
-            (Instruction::mem(Op::MovMA, 0x07), 0x0087),     // mov tblp,a
+            (Instruction::mem(Op::Inc, 0x07), 0x1487),      // inc tblp
+            (Instruction::mem(Op::Tabrd, 0x01), 0x1D01),    // tabrd mp0
+            (Instruction::mem(Op::MovAM, 0x08), 0x0708),    // mov a,tblh
+            (Instruction::mem(Op::MovMA, 0x07), 0x0087),    // mov tblp,a
             (Instruction::simple(Op::ClrWdt2), 0x0005),
-            (Instruction::mem(Op::Orm, 0x20), 0x05A0),       // orm a,[32]
+            (Instruction::mem(Op::Orm, 0x20), 0x05A0), // orm a,[32]
             (Instruction::mem(Op::Adcm, 0x04), 0x1384),
             (Instruction::mem(Op::Siza, 0x03), 0x1603),
             (Instruction::mem(Op::Sdz, 0x05), 0x1785),
@@ -439,9 +484,17 @@ mod tests {
                 let word = ins.encode().unwrap();
                 let back = Instruction::decode(word).unwrap();
                 // TABRD and TABRDC alias each other.
-                let expect_op = if info.op == Op::Tabrdc { Op::Tabrd } else { info.op };
+                let expect_op = if info.op == Op::Tabrdc {
+                    Op::Tabrd
+                } else {
+                    info.op
+                };
                 // CLR WDT1 aliases CLR WDT.
-                let expect_op = if expect_op == Op::ClrWdt1 { Op::ClrWdt } else { expect_op };
+                let expect_op = if expect_op == Op::ClrWdt1 {
+                    Op::ClrWdt
+                } else {
+                    expect_op
+                };
                 assert_eq!(back.op, expect_op);
                 assert_eq!(back.operand, operand);
             }

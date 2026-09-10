@@ -19,13 +19,21 @@ pub struct ExprParser<'a> {
 
 impl<'a> ExprParser<'a> {
     pub fn new(tokens: &'a [Token], symbols: &'a HashMap<String, Symbol>, pc: i64) -> Self {
-        ExprParser { tokens, pos: 0, symbols, pc }
+        ExprParser {
+            tokens,
+            pos: 0,
+            symbols,
+            pc,
+        }
     }
 
     pub fn parse(&mut self) -> Result<i64, ExprError> {
         let v = self.or()?;
         if self.pos != self.tokens.len() {
-            return Err(ExprError::Syntax(format!("unexpected token {:?}", self.tokens[self.pos].kind)));
+            return Err(ExprError::Syntax(format!(
+                "unexpected token {:?}",
+                self.tokens[self.pos].kind
+            )));
         }
         Ok(v)
     }
@@ -174,17 +182,29 @@ impl<'a> ExprParser<'a> {
                     "high" => Ok((self.unary()? >> 8) & 0xFF),
                     "offset" => self.unary(),
                     _ => match self.symbols.get(&lname) {
-                        Some(Symbol { value, kind: SymKind::Num }) | Some(Symbol { value, kind: SymKind::Mem }) => {
-                            Ok(*value)
-                        }
-                        Some(Symbol { kind: SymKind::Bit(_), .. }) => {
-                            Err(ExprError::Syntax(format!("bit symbol '{}' used in an expression", name)))
-                        }
+                        Some(Symbol {
+                            value,
+                            kind: SymKind::Num,
+                        })
+                        | Some(Symbol {
+                            value,
+                            kind: SymKind::Mem,
+                        }) => Ok(*value),
+                        Some(Symbol {
+                            kind: SymKind::Bit(_),
+                            ..
+                        }) => Err(ExprError::Syntax(format!(
+                            "bit symbol '{}' used in an expression",
+                            name
+                        ))),
                         None => Err(ExprError::Undefined(name)),
                     },
                 }
             }
-            Some(other) => Err(ExprError::Syntax(format!("unexpected token {:?} in expression", other))),
+            Some(other) => Err(ExprError::Syntax(format!(
+                "unexpected token {:?} in expression",
+                other
+            ))),
             None => Err(ExprError::Syntax("unexpected end of expression".into())),
         }
     }
