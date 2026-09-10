@@ -164,3 +164,37 @@ docs/             language reference and instruction-set notes
 ## License
 
 `htc` is released under the MIT license (see `LICENSE` in this directory).
+
+## Programming with an e-Link8 Lite (`host/elink8.py`)
+
+`host/elink8.py` is a Python 3 script (no Rust needed) for Holtek's e-Link8
+Lite / e-Link / e-Writer programming dongles.  Holtek does not publish the
+dongle's USB wire protocol, so the script has two layers:
+
+* **`WCMD` layer (Windows, works today).** Drives `WCMD.exe`, the *DOS
+  Command Mode* programmer that ships with HOPE3000 (the same package that
+  programs the e-Link8 Lite).  `flash` runs download → erase → program →
+  verify (→ lock); every WCMD command (`-T -D -U -P -V -B -E -L -R -W -C -K
+  -S -A -CON`) is also exposed individually and as a library class.
+  WCMD programs `.MTP` files (from HT-IDE3000 / HOPE3000 "Save") or `.MEM`
+  EEPROM images; the `.MTP` container format is proprietary, so Intel HEX
+  produced by `htc` has to be imported through HOPE3000 or HT-IDE3000 first.
+
+  ```sh
+  pip install pyusb                          # only for the raw layer
+  python host/elink8.py flash firmware.MTP --lock --writer 1
+  python host/elink8.py wcmd -- -T /W1       # any WCMD command
+  ```
+
+* **Raw USB layer (any OS).** Finds the dongle by its USB IDs (vendor
+  `04D9`; application PID `801A`, bootloader PIDs `800E/8030/8032`, 8-bit
+  family `800C 800D 8013 8014 8016 801A 802B` — from `e-link.ini`), dumps
+  descriptors, sends/receives raw packets and replays packet scripts
+  captured with USBPcap/Wireshark.  Use it to probe the device and to
+  reverse-engineer the protocol; there are no protocol commands built in.
+
+  ```sh
+  python host/elink8.py probe
+  python host/elink8.py raw --pid 0x801a --send "01 00 00" --read 64
+  python host/elink8.py replay capture.txt
+  ```
