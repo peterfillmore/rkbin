@@ -1,0 +1,19 @@
+[package]
+name = "htc"
+version = "0.1.0"
+edition = "2021"
+description = "Open-source compiler, assembler, disassembler and simulator for the Holtek HT66F0185 8-bit MCU"
+license = "MIT"
+repository = "https://github.com/peterfillmore/rkbin"
+keywords = ["holtek", "ht66f0185", "compiler", "assembler", "mcu"]
+categories = ["compilers", "embedded", "development-tools"]
+
+[dependencies]
+
+[[bin]]
+name = "htc"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
