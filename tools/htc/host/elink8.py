@@ -787,15 +787,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         return args.func(args)
     except (WcmdError, ValueError) as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
-    except Exception as e:  # pyusb backend problems without importing usb here
-        if type(e).__name__ == "NoBackendError":
+        if type(e).__name__ == "NoBackendError":  # pyusb's NoBackendError subclasses ValueError
             print("error: pyusb found no libusb backend. Install libusb-1.0 (Linux: apt install libusb-1.0-0; "
                   "macOS: brew install libusb; Windows: pip install libusb-package or use the WinUSB/libusbK "
                   "driver that HOPE3000 installs, plus libusb-1.0.dll on PATH).", file=sys.stderr)
             return 1
-        raise
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
